@@ -7,9 +7,11 @@
 //
 
 import UIKit
+import StoreKit
 
 class QuoteTableViewController: UITableViewController {
     
+    let productId = "com.maready.InspoQuotes.MyQuotePremiumAccess"
     var quotesToShow = [
         "Our greatest glory is not in never falling, but in rising every time we fall. — Confucius",
         "All our dreams can come true, if we have the courage to pursue them. – Walt Disney",
@@ -30,78 +32,104 @@ class QuoteTableViewController: UITableViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithTransparentBackground()
+        appearance.backgroundColor = UIColor.systemOrange
+        appearance.titleTextAttributes = [.foregroundColor: UIColor.white]
+        navigationItem.standardAppearance = appearance
+        navigationItem.scrollEdgeAppearance = appearance
+        
+        SKPaymentQueue.default().add(self)
+        if isPremiumUser() {
+            showPremiumQuotes()
+        }
     }
 
     // MARK: - Table view data source
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         // #warning Incomplete implementation, return the number of rows
-        return quotesToShow.count
+        return quotesToShow.count + 1
     }
 
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "QuoteCell", for: indexPath)
 
-        cell.textLabel!.text = quotesToShow[indexPath.row]
+        if indexPath.row < quotesToShow.count {
+            cell.textLabel!.textColor = UIColor.black
+            cell.accessoryType = .none
+            cell.textLabel!.text = quotesToShow[indexPath.row]
+        } else {
+            cell.textLabel!.text = "Buy more quotes"
+            cell.textLabel!.textColor = UIColor.orange
+            cell.accessoryType = .disclosureIndicator
+        }
         cell.textLabel!.numberOfLines = 0
 
         return cell
     }
     
-
-    /*
-    // Override to support conditional editing of the table view.
-    override func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool {
-        // Return false if you do not want the specified item to be editable.
-        return true
-    }
-    */
-
-    /*
-    // Override to support editing the table view.
-    override func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCellEditingStyle, forRowAt indexPath: IndexPath) {
-        if editingStyle == .delete {
-            // Delete the row from the data source
-            tableView.deleteRows(at: [indexPath], with: .fade)
-        } else if editingStyle == .insert {
-            // Create a new instance of the appropriate class, insert it into the array, and add a new row to the table view
-        }    
-    }
-    */
-
-    /*
-    // Override to support rearranging the table view.
-    override func tableView(_ tableView: UITableView, moveRowAt fromIndexPath: IndexPath, to: IndexPath) {
-
-    }
-    */
-
-    /*
-    // Override to support conditional rearranging of the table view.
-    override func tableView(_ tableView: UITableView, canMoveRowAt indexPath: IndexPath) -> Bool {
-        // Return false if you do not want the item to be re-orderable.
-        return true
-    }
-    */
-
-    /*
-    // MARK: - Navigation
-
-    // In a storyboard-based application, you will often want to do a little preparation before navigation
-    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        // Get the new view controller using segue.destination.
-        // Pass the selected object to the new view controller.
-    }
-    */
+    // MARK: - TableView delegate methods
     
-    
-    
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        if indexPath.row == quotesToShow.count {
+            purchasePremiumQuotes()
+        }
+        tableView.deselectRow(at: indexPath, animated: true)
+    }
     
     
     @IBAction func restorePressed(_ sender: UIBarButtonItem) {
         
     }
 
+    // MARK: - In-App Purchase methods
+    
+    func purchasePremiumQuotes() {
+        if SKPaymentQueue.canMakePayments() {
+            let paymentRequest = SKMutablePayment()
+            paymentRequest.productIdentifier = productId
+            SKPaymentQueue.default().add(paymentRequest)
+            print("paymentRequest initialized...")
+            
+        } else {
+            print("User cannot make payments...")
+        }
+    }
 
+}
+
+extension QuoteTableViewController: SKPaymentTransactionObserver {
+    func paymentQueue(_ queue: SKPaymentQueue, updatedTransactions transactions: [SKPaymentTransaction]) {
+        for transaction in transactions {
+            print(".transactionState: \(transaction.transactionState)")
+            switch transaction.transactionState {
+            case .purchased:
+                print("purchase successful...")
+                SKPaymentQueue.default().finishTransaction(transaction)
+                UserDefaults.standard.set(true, forKey: productId)
+                showPremiumQuotes()
+            case .failed:
+                if let error = transaction.error {
+                    let errorDescription = error.localizedDescription
+                    print("Purchase Failed: \(errorDescription)")
+                }
+                SKPaymentQueue.default().finishTransaction(transaction)
+            default:
+                print("purchase default state (neither successful nor failed...")
+            }
+        }
+    }
+    
+    func showPremiumQuotes() {
+        quotesToShow.append(contentsOf: premiumQuotes)
+        tableView.reloadData()
+    }
+    
+    func isPremiumUser() -> Bool {
+        return UserDefaults.standard.bool(forKey: productId)
+    }
+    
 }
